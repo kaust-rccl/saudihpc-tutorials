@@ -1,0 +1,21 @@
+Time,Duration,Session Segment,Key Activities / Focus
+00:00 - 00:10,10 mins,Housekeeping & Access,"Distribute cluster login credentials, URLs, and troubleshoot immediate network/login friction."
+00:10 - 00:25,15 mins,The Mission Briefing,Introduction & Context: What is the tutorial about? (The GFSAD1000 food security narrative).Learning Outcomes: Moving from manual notebooks to automated production architectures.Why Kubeflow?: Overcoming the friction of infrastructure management for data scientists.
+00:25 - 00:35,10 mins,The Terrain (Cluster & Quota),"Explain the architecture: Ephemeral infrastructure (destroyed post-tutorial), your personal interactive T4 GPU, and the shared 2-GPU batch pool managed by Kueue."
+00:35 - 00:45,10 mins,Exercise 1: Walkthrough,"Live instructor walkthrough of the Kubeflow Central Dashboard, provisioning a Notebook Server, and mapping the dataset PVC."
+00:45 - 01:00,15 mins,Exercise 1: Student Lab,"Students provision their own T4 workspace, verify CUDA settings, and evaluate the flawed baseline model."
+01:00 - 01:05,5 mins,Exercise 1: Reflection,Discuss the efficiency of cloud-managed GPU workspaces and highlight why the baseline model’s accuracy isn't field-ready.
+01:05 - 01:15,10 mins,Exercise 2: Walkthrough,Instructor shows how manual tweaking fails and walks through creating a Katib Experiment UI/YAML that requests 1-GPU slices from Kueue.
+01:15 - 01:30,15 mins,Exercise 2: Student Lab,"Students launch their Katib HPO experiment, watch Kueue schedule trials 2-at-a-time, and extract the winning parameters."
+01:30 - 01:35,5 mins,Exercise 2: Reflection,"Highlight how Katib automated the ""guessing game"" while Kueue fairly distributed trials across the shared cluster resources."
+01:35 - 01:45,10 mins,Bio-Break ☕,"A necessary 10-minute pause for students to stretch, grab coffee, and let any lagging cluster jobs catch up."
+01:45 - 01:55,10 mins,Exercise 3: Walkthrough,"Instructor demonstrates taking the winning hyperparameters from Katib and submitting a full-scale, distributed 2-GPU batch job using Kubeflow Trainer."
+01:55 - 02:10,15 mins,Exercise 3: Student Lab,"Students trigger the heavy batch training run, monitor real-time worker logs, and save the optimized production model artifact back to their PVC."
+02:10 - 02:15,5 mins,Exercise 3: Reflection,Deep dive into the shift from interactive coding to background batch processing. Point out why we scale up after finding optimal settings.
+02:15 - 02:25,10 mins,Exercise 4: Walkthrough,Instructor explains the fragility of manual scripts and walks through coding Kubeflow Pipelines (KFP) SDK components to automate the workflow.
+02:25 - 02:40,15 mins,Exercise 4: Student Lab,"Students wrap data preparation and model paths into Python functions, compile their DAG pipeline, and view the visual execution graph."
+02:40 - 02:45,5 mins,Exercise 4: Reflection,"Discuss how pipelines act as repeatable production blueprint factories, preparing engineering teams for continuous incoming satellite data."
+02:45 - 02:50,5 mins,Exercise 5: Walkthrough,Instructor demonstrates taking the PVC model artifact and creating a live KServe InferenceService API.
+02:50 - 03:00,10 mins,Exercise 5: Student Lab,Students deploy their KServe service and send mock HTTP pixel payloads to verify real-time API crop classifications (Irrigated vs. Rainfed).
+03:00 - 03:05,5 mins,Exercise 5: Reflection,Review the complete lifecycle: how a model transforms from a static file on a disk into a high-performance web API.
+03:05 - 03:10,5 mins,Closing & Feedback,"Wrap up the mission narrative, summarize the end-to-end MLOps journey, and distribute the workshop survey link."

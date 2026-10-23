@@ -1,0 +1,16 @@
+# datasets, caches and generated artifacts are never committed
+notebooks/data/
+notebooks/artifacts/
+data/
+artifacts/
+*.npz
+*.npy
+*.parquet
+*.zip
+*.pt
+*.pkl
+*.csv.gz
+!docs/*.csv
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store

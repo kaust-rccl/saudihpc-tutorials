@@ -1,0 +1,17 @@
+# Versions used on the original (CPU-only) machine, Python 3.13.
+# On a GPU machine install the CUDA builds of torch/torchvision from https://pytorch.org first, then the rest.
+torch>=2.14
+torchvision>=0.29
+numpy>=2.5
+pandas>=3.0
+pyarrow>=26
+scikit-learn>=1.9
+matplotlib>=3.11
+seaborn>=0.13
+pillow>=13
+jupyter
+ipykernel
+nbconvert
+nbformat
+# only for the GFSAD notebook / scripts (Earth Engine):
+earthengine-api>=1.7
