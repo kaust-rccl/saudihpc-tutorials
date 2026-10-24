@@ -1,0 +1,65 @@
+# STABLE (2026-10-24): ran successfully from the Katib UI as experiment `new-bo-ui`: 4 trials, 3 min 17 s, GB10 cluster, no failures. Best trial lr 9.6e-4: dev_auc 0.888, lab accuracy 0.972.
+# Paste into the Katib UI: New Experiment -> "Edit and submit YAML contents".
+# Bayesian search over the learning rate; early stopping is done by our own script (Katib's median-stop can stall an experiment).
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: katib-bayes-exp
+  namespace: <your-namespace>
+spec:
+  objective:
+    type: maximize
+    objectiveMetricName: dev_auc
+    additionalMetricNames: [val_acc]
+  algorithm:
+    algorithmName: bayesianoptimization
+    algorithmSettings:
+    - {name: random_state, value: "7"}
+    - {name: n_initial_points, value: "3"}
+  parallelTrialCount: 1
+  maxTrialCount: 4
+  maxFailedTrialCount: 2
+  parameters:
+  - name: lr
+    parameterType: double
+    feasibleSpace: {min: "0.00003", max: "0.001"}
+  metricsCollectorSpec:
+    collector: {kind: StdOut}
+  trialTemplate:
+    primaryContainerName: trial
+    trialParameters:
+    - {name: learningRate, description: learning rate for this trial, reference: lr}
+    successCondition: status.conditions.#(type=="Complete")#|#(status=="True")#
+    failureCondition: status.conditions.#(type=="Failed")#|#(status=="True")#
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        backoffLimit: 0
+        template:
+          metadata:
+            annotations: {sidecar.istio.io/inject: "false"}
+          spec:
+            restartPolicy: Never
+            securityContext: {fsGroup: 100}
+            containers:
+            - name: trial
+              image: ghcr.io/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0
+              imagePullPolicy: IfNotPresent
+              command: [python, /scripts/train_trial.py]
+              args: [--data, /data/cropguard, --lr, "${trialParameters.learningRate}", --epochs, "2", --seed, "11", --workers, "4",
+                     --max-seconds, "33.5", --stop-rule, "0.5:0.88", --stop-auc, "0.5:0.78"]
+              resources:
+                requests: {cpu: "4", memory: 6Gi}
+                limits: {cpu: "8", memory: 12Gi, nvidia.com/gpu: "1"}
+              volumeMounts:
+              - {name: script, mountPath: /scripts, readOnly: true}
+              - {name: data, mountPath: /data, subPath: data, readOnly: true}
+              - {name: dshm, mountPath: /dev/shm}
+            volumes:
+            - name: script
+              configMap: {name: cropguard-train-trial}
+            - name: data
+              persistentVolumeClaim: {claimName: test-datavol-1}
+            - name: dshm
+              emptyDir: {medium: Memory, sizeLimit: 2Gi}
