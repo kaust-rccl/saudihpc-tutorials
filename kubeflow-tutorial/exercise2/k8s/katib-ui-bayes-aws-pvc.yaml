@@ -1,0 +1,71 @@
+# AWS platform variant WITHOUT a ConfigMap: the trial script is read from the PVC.
+# Same as katib-ui-bayes-aws.yaml (Kueue queue label, Harbor image, GPU-only resources) except:
+#  - no ConfigMap: the container runs `python /data/code/train_trial.py` straight from the PVC `data`;
+#  - the PVC `home` is mounted at /home/jovyan (writable); the PVC `data` stays at /data (read-only: script and dataset).
+# Needs in the namespace: PVC `data` holding code/train_trial.py and the dataset at cropguard/ (so /data/code/train_trial.py and /data/cropguard),
+# and the PVC `home`. Re-copy train_trial.py to <data volume>/code/ after editing it: there is nothing else to refresh.
+# Paste into the Katib UI: New Experiment -> "Edit and submit YAML contents".
+# Bayesian search over the learning rate; early stopping is done by our own script (Katib's median-stop can stall an experiment).
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: katib-bayes-exp
+  namespace: <your-namespace>
+spec:
+  objective:
+    type: maximize
+    objectiveMetricName: dev_auc
+    additionalMetricNames: [val_acc]
+  algorithm:
+    algorithmName: bayesianoptimization
+    algorithmSettings:
+    - {name: random_state, value: "7"}
+    - {name: n_initial_points, value: "3"}
+  parallelTrialCount: 1
+  maxTrialCount: 4
+  maxFailedTrialCount: 2
+  parameters:
+  - name: lr
+    parameterType: double
+    feasibleSpace: {min: "0.00003", max: "0.001"}
+  metricsCollectorSpec:
+    collector: {kind: StdOut}
+  trialTemplate:
+    primaryContainerName: trial
+    trialParameters:
+    - {name: learningRate, description: learning rate for this trial, reference: lr}
+    successCondition: status.conditions.#(type=="Complete")#|#(status=="True")#
+    failureCondition: status.conditions.#(type=="Failed")#|#(status=="True")#
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        labels: {kueue.x-k8s.io/queue-name: batch}
+      spec:
+        backoffLimit: 0
+        template:
+          metadata:
+            annotations: {sidecar.istio.io/inject: "false"}
+          spec:
+            restartPolicy: Never
+            securityContext: {fsGroup: 100}
+            containers:
+            - name: trial
+              image: registry.tutorial.internal/ghcr/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0
+              imagePullPolicy: IfNotPresent
+              command: [python, /data/code/train_trial.py]
+              args: [--data, /data/cropguard, --lr, "${trialParameters.learningRate}", --epochs, "2", --seed, "11", --workers, "4",
+                     --max-seconds, "33.5", --stop-rule, "0.5:0.88", --stop-auc, "0.5:0.78"]
+              resources:
+                limits: {nvidia.com/gpu: "1"}
+              volumeMounts:
+              - {name: data, mountPath: /data, readOnly: true}
+              - {name: home, mountPath: /home/jovyan}
+              - {name: dshm, mountPath: /dev/shm}
+            volumes:
+            - name: data
+              persistentVolumeClaim: {claimName: data}
+            - name: home
+              persistentVolumeClaim: {claimName: home}
+            - name: dshm
+              emptyDir: {medium: Memory, sizeLimit: 2Gi}
