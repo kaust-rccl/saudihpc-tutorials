@@ -14,3 +14,11 @@ artifacts/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+# Exercise 2 pilot runs: keep the results (*.jsonl), not logs or process ids
+exercise2/pilot/*.log
+exercise2/pilot/*.pid
+
+# build leftovers of the notebook image with kfp-kubernetes
+exercise4/image/wheel/
+exercise4/image/site-packages/
+exercise4/image/push.log

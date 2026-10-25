@@ -1,0 +1,85 @@
+# CropGuard training, 1 node(s) x 2 GPU(s). Same-node condition: both GPUs are in ONE pod, so they are on one node; the workers also check NODE_NAME at start-up.
+# Scripts are read from /home/jovyan/saudihpc-tutorials/kubeflow-tutorial (home volume); the dataset is /data/cropguard and the model is saved under /data/models/cropguard (data volume).
+apiVersion: "trainer.kubeflow.org/v1alpha1"
+kind: "TrainJob"
+metadata:
+  name: "cropguard-train"
+  namespace: "<your-namespace>"
+  labels:
+    kueue.x-k8s.io/queue-name: "batch"
+spec:
+  runtimeRef:
+    apiGroup: "trainer.kubeflow.org"
+    kind: "ClusterTrainingRuntime"
+    name: "torch-distributed"
+  trainer:
+    image: "registry.tutorial.internal/ghcr/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0"
+    numNodes: 1
+    numProcPerNode: 2
+    resourcesPerNode:
+      limits:
+        nvidia.com/gpu: "2"
+    command:
+      - "torchrun"
+      - "/home/jovyan/saudihpc-tutorials/kubeflow-tutorial/exercise3/train_ddp.py"
+    args:
+      - "--data"
+      - "/data/cropguard"
+      - "--out"
+      - "/data/models/cropguard"
+      - "--lr"
+      - "0.0003"
+      - "--epochs"
+      - "2"
+      - "--seed"
+      - "42"
+      - "--batch-size"
+      - "64"
+    env:
+      - name: "PYTHONUNBUFFERED"
+        value: "1"
+      - name: "NODE_NAME"
+        valueFrom:
+          fieldRef:
+            fieldPath: "spec.nodeName"
+  runtimePatches:
+    - manager: "tutorial.example.org/cropguard-exercise3"
+      trainingRuntimeSpec:
+        template:
+          spec:
+            replicatedJobs:
+              - name: "node"
+                template:
+                  metadata:
+                    labels:
+                      kueue.x-k8s.io/queue-name: "batch"
+                  spec:
+                    template:
+                      metadata:
+                        annotations:
+                          sidecar.istio.io/inject: "false"
+                        labels:
+                          kueue.x-k8s.io/queue-name: "batch"
+                      spec:
+                        securityContext:
+                          fsGroup: 100
+                        volumes:
+                          - name: "data"
+                            persistentVolumeClaim:
+                              claimName: "data"
+                          - name: "home"
+                            persistentVolumeClaim:
+                              claimName: "home"
+                          - name: "dshm"
+                            emptyDir:
+                              medium: "Memory"
+                              sizeLimit: "2Gi"
+                        containers:
+                          - name: "node"
+                            volumeMounts:
+                              - name: "data"
+                                mountPath: "/data"
+                              - name: "home"
+                                mountPath: "/home/jovyan"
+                              - name: "dshm"
+                                mountPath: "/dev/shm"

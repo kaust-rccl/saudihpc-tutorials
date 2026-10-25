@@ -1,0 +1,60 @@
+# InferenceService "cropguard"
+# inside the cluster: http://cropguard-predictor.<your-namespace>.svc.cluster.local/v1/models/cropguard:predict
+# from outside:       https://<cluster-address>/serving/<your-namespace>/cropguard/v1/models/cropguard:predict   (the cluster gateway asks for a login)
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: cropguard
+  namespace: <your-namespace>
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    sidecar.istio.io/inject: "false"          # plain in-cluster HTTP; the Istio sidecar is not needed for this exercise
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 1
+    containers:
+    - name: kserve-container                  # KServe expects this name for a custom container
+      image: registry.tutorial.internal/ghcr/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0
+      imagePullPolicy: IfNotPresent
+      command: [python, /home/jovyan/saudihpc-tutorials/kubeflow-tutorial/exercise5/serve_cropguard.py]
+      env:
+      - {name: MODEL_DIR, value: /data/models/cropguard/production}
+      - {name: MODEL_NAME, value: cropguard}
+      - {name: PYTHONUNBUFFERED, value: "1"}
+      - {name: BASE_PATH, value: /serving/<your-namespace>/cropguard}
+      ports:
+      - {containerPort: 8080, protocol: TCP}
+      resources:
+        requests: {cpu: "1", memory: 2Gi}
+        limits: {cpu: "2", memory: 4Gi}
+      readinessProbe:
+        httpGet: {path: /v1/models/cropguard, port: 8080}
+        initialDelaySeconds: 5
+        periodSeconds: 5
+      volumeMounts:
+      - {name: data, mountPath: /data, readOnly: true}
+      - {name: home, mountPath: /home/jovyan, readOnly: true}
+    volumes:
+    - name: data
+      persistentVolumeClaim: {claimName: data}
+    - name: home
+      persistentVolumeClaim: {claimName: home}
+---
+# The address from outside: any host name, this path prefix, on the cluster gateway. (A plain Ingress cannot rewrite paths, so the service accepts the prefix: BASE_PATH.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cropguard-path
+  namespace: <your-namespace>
+spec:
+  ingressClassName: istio
+  rules:
+  - http:
+      paths:
+      - path: /serving/<your-namespace>/cropguard
+        pathType: Prefix
+        backend:
+          service:
+            name: cropguard-predictor
+            port: {number: 80}
