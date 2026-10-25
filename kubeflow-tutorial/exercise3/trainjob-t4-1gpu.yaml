@@ -1,9 +1,17 @@
-# CropGuard training, 1 node(s) x 2 GPU(s). Same-node condition: both GPUs are in ONE pod, so they are on one node; the workers also check NODE_NAME at start-up.
+# CropGuard training, 1 node(s) x 1 GPU(s). Same-node condition: both GPUs are in ONE pod, so they are on one node; the workers also check NODE_NAME at start-up.
 # Scripts are read from /home/jovyan/saudihpc-tutorials/kubeflow-tutorial (home volume); the dataset is /data/cropguard and the model is saved under /data/models/cropguard (data volume).
+# Submit with: kubectl apply -f trainjob-t4-1gpu.yaml
+# Check status with: kubectl get trainjob cropguard-1gpu
+# Check logs with: 
+#    kubectl get pods
+#    kubectl logs <pod-name> 
+
+ 
+
 apiVersion: "trainer.kubeflow.org/v1alpha1"
 kind: "TrainJob"
 metadata:
-  name: "cropguard-train"
+  name: "cropguard-1gpu"
   namespace: "<your-namespace>"
   labels:
     kueue.x-k8s.io/queue-name: "batch"
@@ -15,10 +23,10 @@ spec:
   trainer:
     image: "registry.tutorial.internal/ghcr/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0"
     numNodes: 1
-    numProcPerNode: 2
+    numProcPerNode: 1
     resourcesPerNode:
       limits:
-        nvidia.com/gpu: "2"
+        nvidia.com/gpu: "1"
     command:
       - "torchrun"
       - "/home/jovyan/saudihpc-tutorials/kubeflow-tutorial/exercise3/train_ddp.py"
@@ -35,6 +43,8 @@ spec:
       - "42"
       - "--batch-size"
       - "64"
+      - "--name"
+      - "t4-1gpu"
     env:
       - name: "PYTHONUNBUFFERED"
         value: "1"
