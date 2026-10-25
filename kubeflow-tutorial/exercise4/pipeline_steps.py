@@ -37,7 +37,8 @@ def check_data(a):
 
 
 def evaluate(a):
-    import torch, cropguard_lib as cg
+    import cropguard_lib as cg
+    import torch
     run, models, cand, recs = paths(a)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data = cg.Data(a.data)
