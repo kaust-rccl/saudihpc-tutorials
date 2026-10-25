@@ -53,7 +53,7 @@ spec:
             - name: trial
               image: registry.tutorial.internal/ghcr/kubeflow/kubeflow/notebook-servers/jupyter-pytorch-cuda-full:v1.11.0
               imagePullPolicy: IfNotPresent
-              command: [python, /data/code/train_trial.py]
+              command: [python, /home/jovyan/saudihpc-tutorials/kubeflow-tutorial/exercise2/train_trial.py]
               args: [--data, /data/cropguard, --lr, "${trialParameters.learningRate}", --epochs, "2", --seed, "11", --workers, "4",
                      --max-seconds, "33.5", --stop-rule, "0.5:0.88", --stop-auc, "0.5:0.78"]
               resources:
