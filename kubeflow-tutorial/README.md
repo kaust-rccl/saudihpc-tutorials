@@ -1,40 +1,80 @@
-# Kubeflow tutorial: food-security story (work in progress)
+# Operation CropGuard: a Kubeflow tutorial
 
-Content for a Kubeflow tutorial built around the data-science model lifecycle: interactive computing, Kubeflow Pipelines, Katib,
-distributed training and KServe. **Status: beta storyline in notebooks; no Kubeflow manifests yet.**
+A hands-on tutorial in five exercises that takes one machine-learning problem from a notebook to a running service on Kubeflow.
 
-**Start with [`memory.md`](memory.md)**: what was tried, the results so far (with their caveats), open questions and next steps.
+**The problem.** A farm app should tell a farmer whether a coffee leaf is sick from a phone photo. The best public training photos (PlantVillage) were taken in a lab; real field photos look different. You train a model on lab photos, find out how it does in the field, then use Kubeflow to tune it, scale it up, gate it, and serve it.
 
-| Path | What |
-|---|---|
-| `notebooks/cropguard_beta.ipynb` | Main story: leaf-disease triage, PlantVillage (train) + RoCoLe (real-world check). Runs on CPU; section 9 uses a GPU if present |
-| `notebooks/exercise1_workspace_and_baseline.ipynb` | **Exercise 1 (student notebook)**: GPU check, data volume, fine-tune ConvNeXt-Tiny on lab photos, field test on RoCoLe, manual augmentation fix. Needs a GPU and the packed dataset below; no downloads |
-| `data_prep/build_cropguard_dataset.py` | Instructor-side: packs the dataset for the participants' PVC (1.55 GB: images, split tables, ConvNeXt-Tiny weights) |
-| `exercise2/k8s/katib-ui-bayes.yaml` | **Exercise 2 (Katib), stable experiment**: Bayesian search over the learning rate, 4 trials, ran in the Katib UI in 3 min 17 s. Paste it into "Edit and submit YAML". It expects the ConfigMap `cropguard-train-trial` (the trial script) and the dataset volume in the namespace |
-| `notebooks/cropwatch_beta.ipynb` | Earlier GFSAD cropland story (reference only; needs Earth Engine) |
-| `experiments/` | Scripts for the augmentation sweep, locked-half evaluation and the backbone comparison (they read the notebook's cache) |
-| `gfsad/` | Scripts from the GFSAD exploration |
-| `docs/agenda.csv` | Tutorial agenda |
+## Exercises
 
-## Quick start
-```bash
-conda create -n kf-tutorial-26 python=3.13 -y && conda activate kf-tutorial-26
-# install the CUDA build of torch/torchvision for your machine first (https://pytorch.org), then:
-pip install -r requirements.txt
-python -m ipykernel install --user --name kf-tutorial-26 --display-name "Python (kf-tutorial-26)"
-cd notebooks && jupyter lab cropguard_beta.ipynb
+| # | Topic | Kubeflow component | What you do | Where |
+|---|---|---|---|---|
+| 1 | Workspace and baseline | Notebooks | Inspect your GPU workspace and data, train a ConvNeXt-Tiny baseline on lab photos, test it on coffee photos | [exercise1/](exercise1/) |
+| 2 | Hyperparameter search | Katib | Run a Bayesian search over the learning rate with short trials | [exercise2/](exercise2/) |
+| 3 | Scaling up the winner | Trainer (TrainJob) | Run the same training as a background job on 1 or 2 GPUs with PyTorch DDP; compare throughput | [exercise3/](exercise3/README.md) |
+| 4 | A gate before production | Pipelines | Check data, train, evaluate, gate, publish; a weak model is blocked | [exercise4/](exercise4/README.md) |
+| 5 | From a file to a service | KServe | Serve the `production` model over HTTP, with a tuned cut-off and a "refer to extension officer" fallback | [exercise5/](exercise5/README.md) |
+
+Each exercise builds on the previous one: Exercise 3 writes a model folder, Exercise 4 evaluates and publishes it as `production`, and Exercise 5 serves whatever `production` points to.
+
+## The data and the two rules that matter
+
+Two datasets are packed into `/data/cropguard`:
+
+* **PlantVillage** (lab leaves, 38 classes) is split **by leaf**, so sibling photos of one leaf never land in both train and test.
+* **RoCoLe** (real coffee-leaf photos, healthy or sick) is split **by plant** into a `dev` half and a `locked` half.
+  * `dev` is for making choices (a setting, a recipe, a cut-off).
+  * `locked` is the final exam. Nothing is chosen with it. Only the Exercise 4 evaluate step scores it.
+
+Models are judged by lab accuracy and by a ranking score (AUC) of a "how sick?" score on coffee photos. The dataset itself is not in this repository; see the next section.
+
+## Layout
+
 ```
-The notebook downloads the datasets into `notebooks/data/raw/` if they are missing (about 4.4 GB; PlantVillage from Hugging Face, RoCoLe from Mendeley) and builds
-`notebooks/data/cache/` on the first run. Datasets, caches and model artifacts are git-ignored.
-
-### Exercise 1 (student notebook)
-```bash
-python data_prep/build_cropguard_dataset.py          # from kubeflow-tutorial/; downloads the raw archives if missing, writes data/cropguard/ (~1 min)
-cd notebooks && jupyter lab exercise1_workspace_and_baseline.ipynb
+kubeflow-tutorial/
+├── common/        cropguard_lib.py: shared data loading, model, scores, evaluation (used by exercises 3-5)
+├── exercise1/     notebook: workspace and baseline
+├── exercise2/     train_trial.py (one Katib trial) and k8s/katib-ui-bayes-aws-pvc.yaml
+├── exercise3/     train_ddp.py, make_trainjob.py, follow_trainjob.py, sample TrainJob manifests
+├── exercise4/     pipeline.py, pipeline_steps.py, run_pipeline.py
+└── exercise5/     serve_cropguard.py, make_inferenceservice.py, call_service.py, sample manifest
 ```
-On the cluster, copy `data/cropguard/` onto the PVC. The notebook looks for the folder containing `MANIFEST.json` at `$CROPGUARD_DATA`, `/data/cropguard`,
-`/home/jovyan/data/cropguard`, `../data/cropguard` or `data/cropguard` (edit `CANDIDATES` in step 2 if the PVC is mounted elsewhere). It saves models to `$CROPGUARD_OUT` (default `~/cropguard-artifacts`).
 
-## Data and licenses
-- PlantVillage (`mohanty/PlantVillage` on Hugging Face): the card says CC BY-SA 3.0 (some mirrors say CC0); confirm before redistributing derived data.
-- RoCoLe (Parraga-Alava et al., Data in Brief 2019, doi 10.17632/c5yvn32dzg.2): CC BY 4.0.
+## Prerequisites
+
+* A Kubeflow cluster with Notebooks, Katib, Trainer, Pipelines and KServe (developed on Pipelines 2.16.1 and KServe 0.18 in RawDeployment mode).
+* GPU nodes (written for NVIDIA T4s; developed on a single GB10). A Kueue queue named `batch` is assumed for GPU jobs; pass `--queue ''` to drop the label.
+* A notebook server with a GPU, based on `jupyter-pytorch-cuda-full:v1.11.0` (Exercise 4 can use an image that adds `kfp-kubernetes`, but the pipeline compiles without it).
+* Two volumes mounted in every pod:
+
+  | Volume | Mount | Holds |
+  |---|---|---|
+  | `data` | `/data` | the dataset at `/data/cropguard`, and saved models at `/data/models/cropguard` |
+  | `home` | `/home/jovyan` | this repository, cloned |
+
+* `kubectl` access from the notebook terminal. Images are pulled from the cluster's Harbor registry; the default image paths are placeholders for the author's cluster, so override them with `--image` where your registry differs.
+
+## Getting started
+
+In a notebook terminal:
+
+```bash
+cd /home/jovyan
+git clone <repository-url> saudihpc-tutorials
+cd saudihpc-tutorials/kubeflow-tutorial
+mkdir -p /data/models/cropguard
+```
+
+Then work through the exercises in order. Scripts are run from `kubeflow-tutorial/` and read from the home volume, so nothing is copied to the data volume or built into an image. Later: `git pull` to update.
+
+* **Exercise 1:** open `exercise1/exercise1_workspace_and_baseline.ipynb` and run it top to bottom.
+* **Exercise 2:** edit the namespace in `exercise2/k8s/katib-ui-bayes-aws-pvc.yaml`, then paste it into the Katib UI (New Experiment, "Edit and submit YAML contents"). The manifest runs `train_trial.py` from `/data/code/`, so copy that file there first.
+* **Exercises 3 to 5:** follow the step-by-step instructions in each exercise's README.
+
+## Status
+
+Exercises 3 to 5 were written and tested on a dev cluster with one GPU and have **not yet been run on the T4 cluster**. Each README ends with a list of what was and was not tested, and what to check first. The KServe address from outside the cluster is the least verified part.
+
+## Notes for contributors
+
+* Datasets, model weights (`*.pt`), arrays and generated artifacts are git-ignored; do not commit them.
+* Keep the locked coffee photos out of any training, tuning or search code.
